@@ -269,7 +269,7 @@ public:
       return -1;
     }
 
-    // 写入基本参数
+    // write parameters
     uint32_t n = points_.size();
     uint32_t dim = points_[0].size();
     out.write(reinterpret_cast<const char *>(&n), sizeof(uint32_t));
@@ -278,14 +278,14 @@ public:
     out.write(reinterpret_cast<const char *>(&L_), sizeof(uint32_t));
     out.write(reinterpret_cast<const char *>(&alpha_), sizeof(float));
 
-    // 写入数据点和ID
+    // write data points and ids
     for (uint32_t i = 0; i < n; ++i) {
       out.write(reinterpret_cast<const char *>(points_[i].data()),
                 dim * sizeof(float));
       out.write(reinterpret_cast<const char *>(&ids_[i]), sizeof(uint32_t));
     }
 
-    // 写入图结构
+    // write graph structure
     for (const auto &neighbors : graph_) {
       uint32_t degree = neighbors.size();
       out.write(reinterpret_cast<const char *>(&degree), sizeof(uint32_t));

@@ -5,19 +5,17 @@
 /*
 test:
   g++ -std=c++14 -O3 -g -Xpreprocessor -fopenmp
--I/opt/homebrew/opt/libomp/include example.cpp vamana_c_api.cpp -o
-vamana_example -L/opt/homebrew/opt/libomp/lib -lomp
+  -I/opt/homebrew/opt/libomp/include example.cpp vamana_c_api.cpp -o
+  vamana_example -L/opt/homebrew/opt/libomp/lib -lomp
 */
 
 struct VamanaIndex {
   std::unique_ptr<vamana::Vamana> alg;
-  size_t dim;
 };
 
 VamanaIndex *vamana_create_index(uint32_t dimension, uint32_t max_points,
                                  float alpha, uint32_t R, uint32_t L) {
   auto index = new VamanaIndex();
-  index->dim = dimension;
   index->alg =
       std::make_unique<vamana::Vamana>(dimension, max_points, alpha, R, L);
   return index;
@@ -62,9 +60,8 @@ int vamana_save_index(VamanaIndex *index, const char *path) {
 }
 
 // Load index from file
-VamanaIndex *vamana_load_index(const char *path, uint32_t dim) {
+VamanaIndex *vamana_load_index(const char *path) {
   auto index = new VamanaIndex();
-  index->dim = dim;
   index->alg = std::make_unique<vamana::Vamana>(path);
   return index;
 }

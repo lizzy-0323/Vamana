@@ -31,7 +31,7 @@ void vamana_free_index(VamanaIndex *index);
 int vamana_save_index(VamanaIndex *index, const char *path);
 
 // Load index from file
-VamanaIndex *vamana_load_index(const char *path, uint32_t dim);
+VamanaIndex *vamana_load_index(const char *path) ;
 
 // Get point data from index
 int vamana_get_point(VamanaIndex *index, uint32_t id, float *point);

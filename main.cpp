@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
-// 生成随机向量
+// generate random vector
 std::vector<float> generate_random_vector(uint32_t dimension) {
   static std::random_device rd;
   static std::mt19937 gen(rd());
@@ -20,7 +20,7 @@ std::vector<float> generate_random_vector(uint32_t dimension) {
   return vec;
 }
 
-// compute_distance 用于计算 ground truth
+// compute_distance for calculating ground truth
 float compute_distance(const float *a, const float *b, uint32_t dimension) {
   float sum = 0.0f;
   for (uint32_t i = 0; i < dimension; ++i) {
@@ -31,18 +31,17 @@ float compute_distance(const float *a, const float *b, uint32_t dimension) {
 }
 
 int main() {
-  // 设置参数
-  const uint32_t dimension = 128;    // 向量维度
-  const uint32_t num_points = 1000; // 数据点数量
-  const uint32_t R = 128; // 最大度数，增大以获得更好的连通性，在vamana论文里是R
+  // setting parameters
+  const uint32_t dimension = 128;    // vector dimension
+  const uint32_t num_points = 1000; // number of points
+  const uint32_t R = 128; // maximum degree, larger to obtain better connectivity, R in vamana paper
   const uint32_t L = 100;
-  const float alpha = 1.2f;       // Vamana 参数，增大以获得更好的近似
-  const uint32_t k = 10;          // 查询 top-k
+  const float alpha = 1.2f;       // robust prune parameter, larger to obtain better approximation
+  const uint32_t k = 10;          // top-k
   const uint32_t ef_search = 400; // candidate list size
 
   VamanaIndex *index = vamana_create_index(dimension, num_points, alpha, R, L);
-  // 生成并添加随机点
-  auto add_start = std::chrono::high_resolution_clock::now();
+  // generate and add random points
   for (uint32_t i = 0; i < num_points; ++i) {
     auto point = generate_random_vector(dimension);
     if (vamana_add_point(index, point.data(), i) != 0) {
@@ -51,7 +50,7 @@ int main() {
       return -1;
     }
   }
-  // 构建索引
+  // build index
   std::cout << "Building index..." << std::endl;
   auto start_time = std::chrono::high_resolution_clock::now();
   if (vamana_build_index(index) != 0) {
@@ -64,21 +63,22 @@ int main() {
                         end_time - start_time)
                         .count();
   std::cout << "Index built in " << build_time << " ms" << std::endl;
-  // 保存索引
+
+  // save index
   if (vamana_save_index(index, "../index.bin") != 0) {
     std::cerr << "Failed to save index" << std::endl;
     vamana_free_index(index);
     return -1;
   }
 
-  // 读取索引
-  VamanaIndex *indexLoaded = vamana_load_index("../index.bin", dimension);
+  // Load index
+  VamanaIndex *indexLoaded = vamana_load_index("../index.bin");
   if (!indexLoaded) {
     std::cerr << "Failed to load index" << std::endl;
     return -1;
   }
 
-  // 生成多个查询点并搜索
+  // generate multiple queries and search
   const int num_queries = 100;
   std::cout << "\nPerforming search test with " << num_queries << " queries..."
             << std::endl;
@@ -98,7 +98,7 @@ int main() {
   for (int q = 0; q < num_queries; ++q) {
     const auto &query = queries[q];
 
-    // 计算 ground truth
+    // calculate ground truth
     std::vector<std::pair<float, uint32_t>> exact_distances;
     exact_distances.reserve(num_points);
     for (uint32_t i = 0; i < num_points; ++i) {
@@ -129,7 +129,7 @@ int main() {
       continue;
     }
 
-    // 计算召回率
+    // calculate recall
     int matches = 0;
     std::unordered_set<uint32_t> result_set(result_ids.begin(),
                                             result_ids.end());
@@ -141,13 +141,13 @@ int main() {
     float recall = static_cast<float>(matches) / k;
     total_recall += recall;
 
-    // 输出每个查询的进度
+    // print progress
     if ((q + 1) % 10 == 0) {
       std::cout << "Processed " << (q + 1) << " queries..." << std::endl;
     }
   }
 
-  // 输出平均性能指标
+  // print average performance metrics
   double avg_recall = total_recall / num_queries;
   double avg_search_time = static_cast<double>(total_search_time) / num_queries;
 
@@ -158,7 +158,7 @@ int main() {
   std::cout << "Average Search Time: " << std::fixed << std::setprecision(3)
             << avg_search_time / 1000.0 << " ms" << std::endl;
 
-  // 释放内存
+  // free memory
   vamana_free_index(indexLoaded);
   vamana_free_index(index); 
   return 0;
