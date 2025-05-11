@@ -3,32 +3,35 @@
 Vamana is a graph-based index for approximate nearest neighbor (ANN) search, first introduced in [DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node](https://suhasjs.github.io/files/diskann_neurips19.pdf).
 This repo provides an implementation of Vamana in C++, with go binding for easy usage.
 
-There are two ways for you to use Vamana:
+There are two ways for you to use this repo:
 
-1. Use C++ library in `Vamana.h`
+1. Use C++ library in `index/vamana.h`
 2. Use go binding in `go_api/vamana.go`
 
 ## Pre-requisite
 
 - CMake
 - OpenMP
+- env:
+  - C++ 14
+  - go 1.23
 
-## Build
+## How to use
+
+### To build C++ library
 
 ```bash
 # To make C++ library
 make cc-build
 ```
 
-## How to use
-
-### Test C++ library
+### To test C++ library
 
 ```bash
 make cc-build && ./build/main
 ```
 
-### Test go binding
+### To test go binding
 
 ```bash
 go run main.go
@@ -52,9 +55,7 @@ go run main.go
 
 ## Result
 
-### Random dataset
-
-Using the following parameters, I got **average recall: 90.10%**:
+Using the following parameters, got **average recall: 90.10%** on random dataset:
 
 ```c++
 const uint32_t dimension = 128;    // vector dimension
