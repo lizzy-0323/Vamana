@@ -13,7 +13,10 @@ go-build: cc-build
 cc-build:
 	$(CC_BUILD)
 
-.PHONY: all go-build cc-build
+clean:
+	rm -rf build
+
+.PHONY: all go-build cc-build clean
 
 
 

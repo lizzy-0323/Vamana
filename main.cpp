@@ -33,12 +33,12 @@ float compute_distance(const float *a, const float *b, uint32_t dimension) {
 int main() {
   // setting parameters
   const uint32_t dimension = 128;    // vector dimension
-  const uint32_t num_points = 1000; // number of points
+  const uint32_t num_points = 10000; // number of points
   const uint32_t R = 128; // maximum degree, larger to obtain better connectivity, R in vamana paper
-  const uint32_t L = 100;
+  const uint32_t L = 100; // candidate list size in building, L in paper
   const float alpha = 1.2f;       // robust prune parameter, larger to obtain better approximation
   const uint32_t k = 10;          // top-k
-  const uint32_t ef_search = 400; // candidate list size
+  const uint32_t ef_search = 400; // candidate list size in search
 
   VamanaIndex *index = vamana_create_index(dimension, num_points, alpha, R, L);
   // generate and add random points
