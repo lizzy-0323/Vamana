@@ -72,7 +72,8 @@ const uint32_t ef_search = 400; // candidate list size in search
 
 ## TODO
 
-- [ ]  inner product
+- [ ]  Inner product
 - [ ]  PQ Index
 - [ ]  Cache for index
-- [ ]  parallel search
+- [ ]  Parallel search
+- [ ]  Add visualization
