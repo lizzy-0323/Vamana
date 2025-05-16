@@ -1,5 +1,6 @@
 #include "vamana_c_api.h"
 #include "index/vamana.h"
+#include <cstdint>
 #include <memory>
 
 /*
@@ -8,16 +9,16 @@ test:
   -I/opt/homebrew/opt/libomp/include example.cpp vamana_c_api.cpp -o
   vamana_example -L/opt/homebrew/opt/libomp/lib -lomp
 */
-
 struct VamanaIndex {
   std::unique_ptr<vamana::Vamana> alg;
 };
 
 VamanaIndex *vamana_create_index(uint32_t dimension, uint32_t max_points,
-                                 float alpha, uint32_t R, uint32_t L) {
+                                 float alpha, uint32_t R, uint32_t L,
+                                 uint32_t efSearch) {
   auto index = new VamanaIndex();
-  index->alg =
-      std::make_unique<vamana::Vamana>(dimension, max_points, alpha, R, L);
+  index->alg = std::make_unique<vamana::Vamana>(dimension, max_points, alpha, R,
+                                                L, efSearch);
   return index;
 }
 
@@ -35,13 +36,22 @@ int vamana_build_index(VamanaIndex *index) {
   return index->alg->BuildIndex();
 }
 
-int vamana_search(VamanaIndex *index, const float *query, uint32_t k,
-                  uint32_t ef_search, uint32_t *result_ids,
-                  float *result_distances) {
+int vamana_search_with_start_point(VamanaIndex *index, const float *query,
+                                   const float *start_point, uint32_t k,
+                                   uint32_t *result_ids,
+                                   float *result_distances) {
   if (!index || !index->alg) {
     return -1;
   }
-  return index->alg->Search(query, k, ef_search, result_ids, result_distances);
+  return index->alg->SearchWithStartPoint(query, start_point, k, result_ids,
+                                          result_distances);
+}
+int vamana_search(VamanaIndex *index, const float *query, uint32_t k,
+                  uint32_t *result_ids, float *result_distances) {
+  if (!index || !index->alg) {
+    return -1;
+  }
+  return index->alg->Search(query, k, result_ids, result_distances);
 }
 
 int vamana_get_point(VamanaIndex *index, uint32_t id, float *point) {
@@ -66,4 +76,27 @@ VamanaIndex *vamana_load_index(const char *path) {
   return index;
 }
 
+void vamana_print_params(VamanaIndex *index) {
+  if (!index || !index->alg) {
+    std::cout << "Index not initialized" << std::endl;
+    return;
+  }
+
+  std::cout << "Vamana Index Parameters:" << std::endl;
+  std::cout << "L (search list size): " << index->alg->GetL() << std::endl;
+  std::cout << "R (max degree): " << index->alg->GetR() << std::endl;
+  std::cout << "Dimension: " << index->alg->GetDimension() << std::endl;
+  std::cout << "Alpha: " << index->alg->GetAlpha() << std::endl;
+  std::cout << "Max Points: " << index->alg->GetMaxPoints() << std::endl;
+  std::cout << "Medoid: " << index->alg->GetMedoid() << std::endl;
+  std::cout << "Current Data Size: " << index->alg->GetDataSize() << std::endl;
+}
+
 void vamana_free_index(VamanaIndex *index) { delete index; }
+
+uint32_t vamana_get_data_size(VamanaIndex *index) {
+  if (!index || !index->alg) {
+    return 0;
+  }
+  return index->alg->GetDataSize();
+}

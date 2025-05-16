@@ -34,13 +34,16 @@ int main() {
   // setting parameters
   const uint32_t dimension = 128;    // vector dimension
   const uint32_t num_points = 10000; // number of points
-  const uint32_t R = 128; // maximum degree, larger to obtain better connectivity, R in vamana paper
+  const uint32_t R = 128;            // maximum degree, larger to obtain better
+                                     // connectivity, R in vamana paper
   const uint32_t L = 100; // candidate list size in building, L in paper
-  const float alpha = 1.2f;       // robust prune parameter, larger to obtain better approximation
+  const float alpha =
+      1.2f; // robust prune parameter, larger to obtain better approximation
   const uint32_t k = 10;          // top-k
   const uint32_t ef_search = 400; // candidate list size in search
 
-  VamanaIndex *index = vamana_create_index(dimension, num_points, alpha, R, L);
+  VamanaIndex *index =
+      vamana_create_index(dimension, num_points, alpha, R, L, ef_search);
   // generate and add random points
   for (uint32_t i = 0; i < num_points; ++i) {
     auto point = generate_random_vector(dimension);
@@ -116,7 +119,7 @@ int main() {
 
     // search
     start_time = std::chrono::high_resolution_clock::now();
-    int num_results = vamana_search(indexLoaded, query.data(), k, ef_search,
+    int num_results = vamana_search(indexLoaded, query.data(), k,
                                     result_ids.data(), result_distances.data());
     end_time = std::chrono::high_resolution_clock::now();
     auto search_time = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -160,6 +163,6 @@ int main() {
 
   // free memory
   vamana_free_index(indexLoaded);
-  vamana_free_index(index); 
+  vamana_free_index(index);
   return 0;
 }

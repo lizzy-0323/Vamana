@@ -39,7 +39,7 @@ func computeDistance(a, b []float32) float32 {
 func TestVamanaBasic() {
 
 	// create index
-	index, err := vamana.NewVamanaIndex(dimension, numPoints, alpha, R, L)
+	index, err := vamana.NewVamanaIndex(dimension, numPoints, alpha, R, L, efSearch)
 	if err != nil {
 		fmt.Println("Failed to create index:", err)
 		return
@@ -92,7 +92,7 @@ func TestVamanaBasic() {
 		})
 
 		// Search
-		ids, distances, err := index.Search(query, k, efSearch)
+		ids, distances, err := index.Search(query, k)
 		if err != nil {
 			fmt.Printf("Search failed for query %d: %v\n", i, err)
 			continue

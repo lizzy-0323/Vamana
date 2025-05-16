@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -22,19 +21,36 @@ private:
   float alpha_;
   uint32_t R_; // equals max degree
   uint32_t L_;
+  uint32_t efSearch_;
+  uint32_t medoid_;
   std::vector<std::vector<float>> points_;
   std::vector<uint32_t> ids_;
   std::vector<std::vector<uint32_t>> graph_;
 
 public:
   Vamana(uint32_t dimension, uint32_t max_points, float alpha, uint32_t R,
-         uint32_t L)
+         uint32_t L, uint32_t efSearch)
       : dimension_(dimension), max_points_(max_points), alpha_(alpha), R_(R),
-        L_(L) {
+        L_(L), efSearch_(efSearch) {
     points_.reserve(max_points);
     ids_.reserve(max_points);
     graph_.reserve(max_points);
+    medoid_ = -1;
   }
+
+  uint32_t GetDimension() const { return dimension_; }
+
+  uint32_t GetMaxPoints() const { return max_points_; }
+
+  uint32_t GetMedoid() const { return medoid_; }
+
+  uint32_t GetDataSize() const { return points_.size(); }
+
+  float GetAlpha() const { return alpha_; }
+
+  uint32_t GetR() const { return R_; }
+
+  uint32_t GetL() const { return L_; }
 
   Vamana(const std::string &filename) {
     std::ifstream in(filename, std::ios::binary);
@@ -49,6 +65,7 @@ public:
     in.read(reinterpret_cast<char *>(&R_), sizeof(uint32_t));
     in.read(reinterpret_cast<char *>(&L_), sizeof(uint32_t));
     in.read(reinterpret_cast<char *>(&alpha_), sizeof(float));
+    in.read(reinterpret_cast<char *>(&medoid_), sizeof(uint32_t));
     max_points_ = n;
 
     // read data and ids
@@ -92,6 +109,113 @@ public:
     graph_.push_back(std::vector<uint32_t>());
     return 0;
   }
+  // Build graph index without parallel
+  int BuildIndexWithoutParallel() {
+    // * This is temporary made for pybinding
+    if (points_.empty()) {
+      std::cerr << "No points to build index" << std::endl;
+      return -1;
+    }
+
+    const uint32_t n = points_.size();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    // Initialize R-regular directed graph
+    InitializeGraph(n, gen);
+
+    std::cout << "graph init success" << std::endl;
+
+    // Find medoid point
+    medoid_ = FindMedoidWithoutParallel();
+    // std::cout << "medoid: " << medoid_ << std::endl;
+    // std::cout << "find medoid" << std::endl;
+
+    // Generate random node order
+    std::vector<uint32_t> perm_list(n);
+    std::iota(perm_list.begin(), perm_list.end(), 0);
+    std::shuffle(perm_list.begin(), perm_list.end(), gen);
+    // std::cout << "generate random node order" << std::endl;
+
+    std::vector<bool> visited(n, false);
+    std::priority_queue<std::pair<float, uint32_t>> candidates;
+    std::vector<uint32_t> visited_nodes;
+    visited_nodes.reserve(n);
+
+    // First round: use alpha=1.0
+    for (uint32_t idx = 0; idx < perm_list.size(); ++idx) {
+      uint32_t i = perm_list[idx];
+      if (i == medoid_)
+        continue;
+
+      // Greedy search from medoid
+      greedySearch(points_[i].data(), medoid_, visited, visited_nodes,
+                   candidates);
+
+      std::vector<uint32_t> neighbors1;
+      neighbors1.reserve(R_);
+      robustPrune(i, visited_nodes, neighbors1, 1.0f);
+
+      graph_[i] = neighbors1;
+
+      // Handle bidirectional connections
+      for (uint32_t j : neighbors1) {
+        std::vector<uint32_t> &j_graph = graph_[j];
+
+        if (j_graph.size() >= R_) {
+          std::vector<uint32_t> j_visited = visited_nodes;
+          j_visited.push_back(i);
+          std::vector<uint32_t> j_neighbors;
+          j_neighbors.reserve(R_);
+          robustPrune(j, j_visited, j_neighbors, 1.0f);
+          j_graph = j_neighbors;
+        } else {
+          auto it = std::find(j_graph.begin(), j_graph.end(), i);
+          if (it == j_graph.end()) {
+            j_graph.push_back(i);
+          }
+        }
+      }
+    }
+
+    // Second round: use alpha=alpha_
+    for (uint32_t idx = 0; idx < perm_list.size(); ++idx) {
+      uint32_t i = perm_list[idx];
+      if (i == medoid_)
+        continue;
+
+      // Perform greedy search from medoid
+      greedySearch(points_[i].data(), medoid_, visited, visited_nodes,
+                   candidates);
+
+      std::vector<uint32_t> neighbors2;
+      neighbors2.reserve(R_);
+      robustPrune(i, visited_nodes, neighbors2, alpha_);
+
+      graph_[i] = neighbors2;
+
+      // Handle bidirectional connections
+      for (uint32_t j : neighbors2) {
+        std::vector<uint32_t> &j_graph = graph_[j];
+
+        if (j_graph.size() >= R_) {
+          std::vector<uint32_t> j_visited = visited_nodes;
+          j_visited.push_back(i);
+          std::vector<uint32_t> j_neighbors;
+          j_neighbors.reserve(R_);
+          robustPrune(j, j_visited, j_neighbors, alpha_);
+          j_graph = j_neighbors;
+        } else {
+          auto it = std::find(j_graph.begin(), j_graph.end(), i);
+          if (it == j_graph.end()) {
+            j_graph.push_back(i);
+          }
+        }
+      }
+    }
+
+    return 0;
+  }
 
   // Build the graph index
   int BuildIndex() {
@@ -107,8 +231,10 @@ public:
     // Initialize R-regular directed graph
     InitializeGraph(n, gen);
 
+    std::cout << "grpah init success" << std::endl;
+
     // Find medoid point
-    uint32_t medoid = FindMedoid();
+    medoid_ = FindMedoid();
 
     // Generate random node order
     std::vector<uint32_t> perm_list(n);
@@ -126,11 +252,11 @@ public:
 #pragma omp for schedule(dynamic)
       for (uint32_t idx = 0; idx < perm_list.size(); ++idx) {
         uint32_t i = perm_list[idx];
-        if (i == medoid)
+        if (i == medoid_)
           continue;
 
         // greedy search from medoid
-        greedySearch(points_[i].data(), medoid, thread_visited,
+        greedySearch(points_[i].data(), medoid_, thread_visited,
                      thread_visited_nodes, thread_candidates);
 
         std::vector<uint32_t> neighbors1;
@@ -166,11 +292,11 @@ public:
 #pragma omp for schedule(dynamic)
       for (uint32_t idx = 0; idx < perm_list.size(); ++idx) {
         uint32_t i = perm_list[idx];
-        if (i == medoid)
+        if (i == medoid_)
           continue;
 
         // Perform greedy search from medoid
-        greedySearch(points_[i].data(), medoid, thread_visited,
+        greedySearch(points_[i].data(), medoid_, thread_visited,
                      thread_visited_nodes, thread_candidates);
 
         std::vector<uint32_t> neighbors2;
@@ -202,7 +328,6 @@ public:
         }
       }
     }
-
     return 0;
   }
 
@@ -277,6 +402,7 @@ public:
     out.write(reinterpret_cast<const char *>(&R_), sizeof(uint32_t));
     out.write(reinterpret_cast<const char *>(&L_), sizeof(uint32_t));
     out.write(reinterpret_cast<const char *>(&alpha_), sizeof(float));
+    out.write(reinterpret_cast<const char *>(&medoid_), sizeof(uint32_t));
 
     // write data points and ids
     for (uint32_t i = 0; i < n; ++i) {
@@ -297,20 +423,30 @@ public:
     return 0;
   }
 
-  // Search for k nearest neighbors
-  int Search(const float *query, uint32_t k, uint32_t ef_search,
-             uint32_t *result_ids, float *result_distances) const {
-    if (!query || !result_ids || !result_distances || k == 0) {
+  int SearchWithStartPoint(const float *query, const float *start_point,
+                           uint32_t k, uint32_t *result_ids,
+                           float *result_distances) const {
+    if (!query || !start_point || !result_ids || !result_distances || k == 0) {
       return -1;
     }
 
+    uint32_t efSearch = efSearch_;
     const uint32_t n = points_.size();
     if (k > n)
       k = n;
-    if (ef_search < k)
-      ef_search = k; // ef_search equals L here;
+    if (efSearch < k)
+      efSearch = k; // ef_search equals L here;
 
-    uint32_t medoid = FindMedoid();
+    // Find the point in our dataset that matches the start_point
+    uint32_t start_idx = 0;
+    float min_dist = std::numeric_limits<float>::max();
+    for (uint32_t i = 0; i < n; ++i) {
+      float dist = ComputeDistance(start_point, points_[i].data());
+      if (dist < min_dist) {
+        min_dist = dist;
+        start_idx = i;
+      }
+    }
 
     std::vector<bool> visited(n, false);
     std::priority_queue<std::pair<float, uint32_t>> candidates;
@@ -321,18 +457,77 @@ public:
 
     std::vector<uint32_t> visited_nodes;
     visited_nodes.reserve(n);
-    greedySearch(query, medoid, visited, visited_nodes, candidates);
+    greedySearch(query, start_idx, visited, visited_nodes, candidates);
 
     // Initialize results with visited nodes
     for (uint32_t node : visited_nodes) {
       float dist = ComputeDistance(query, points_[node].data());
-      if (results.size() < ef_search || dist < results.top().first) {
+      if (results.size() < efSearch || dist < results.top().first) {
         results.emplace(dist, node);
-        if (results.size() > ef_search) {
+        if (results.size() > efSearch) {
           results.pop();
         }
       }
     }
+    // 打印result
+    // std::cout << "Result size: " << results.size() << std::endl;
+
+    std::vector<std::pair<float, uint32_t>> final_results;
+    final_results.reserve(k);
+
+    while (!results.empty() && final_results.size() < k) {
+      final_results.push_back(results.top());
+      results.pop();
+    }
+
+    for (uint32_t i = 0; i < final_results.size(); ++i) {
+      result_distances[i] = final_results[i].first;
+      result_ids[i] = ids_[final_results[i].second];
+    }
+
+    return final_results.size();
+  }
+
+  // Search for k nearest neighbors
+  int Search(const float *query, uint32_t k, uint32_t *result_ids,
+             float *result_distances) const {
+    if (!query || !result_ids || !result_distances || k == 0) {
+      return -1;
+    }
+
+    uint32_t efSearch = efSearch_;
+    const uint32_t n = points_.size();
+    if (k > n)
+      k = n;
+    if (efSearch < k)
+      efSearch = k; // ef_search equals L here;
+
+    std::vector<bool> visited(n, false);
+    std::priority_queue<std::pair<float, uint32_t>> candidates;
+    std::priority_queue<std::pair<float, uint32_t>,
+                        std::vector<std::pair<float, uint32_t>>,
+                        std::greater<std::pair<float, uint32_t>>>
+        results;
+
+    std::vector<uint32_t> visited_nodes;
+    visited_nodes.reserve(n);
+    greedySearch(query, medoid_, visited, visited_nodes, candidates);
+
+    // 打印visited nodes
+    // std::cout << "Visited nodes: " << visited_nodes.size() << std::endl;
+
+    // Initialize results with visited nodes
+    for (uint32_t node : visited_nodes) {
+      float dist = ComputeDistance(query, points_[node].data());
+      if (results.size() < efSearch || dist < results.top().first) {
+        results.emplace(dist, node);
+        if (results.size() > efSearch) {
+          results.pop();
+        }
+      }
+    }
+    // 打印result
+    // std::cout << "Result size: " << results.size() << std::endl;
 
     std::vector<std::pair<float, uint32_t>> final_results;
     final_results.reserve(k);
@@ -365,6 +560,12 @@ private:
       const float *query_point, uint32_t start_point,
       std::vector<bool> &visited, std::vector<uint32_t> &visited_nodes,
       std::priority_queue<std::pair<float, uint32_t>> &candidates) const {
+
+    // here use the single thread version to find the medoid
+    // std::cout << "start_point: " << start_point << std::endl;
+    if (start_point == -1) {
+      start_point = FindMedoidWithoutParallel();
+    }
     const uint32_t n = points_.size();
     visited.assign(n, false);
     while (!candidates.empty())
@@ -403,6 +604,8 @@ private:
       visited_nodes.push_back(current);
 
       // Add the neighbors of the current point to L
+      // std::cout << "Graph neighbors size:" << graph_[current].size()
+      //           << std::endl;
       for (uint32_t neighbor : graph_[current]) {
         if (!visited[neighbor]) {
           float dist = ComputeDistance(query_point, points_[neighbor].data());
@@ -423,6 +626,31 @@ private:
     for (const auto &pair : L) {
       candidates.emplace(-pair.first, pair.second);
     }
+  }
+
+  uint32_t FindMedoidWithoutParallel() const {
+    // * This is temporary made for pybinding
+    const uint32_t n = points_.size();
+    if (n == 0)
+      return 0;
+
+    uint32_t best_medoid = 0;
+    float min_total_dist = std::numeric_limits<float>::max();
+
+    for (uint32_t i = 0; i < n; ++i) {
+      float total_dist = 0;
+      for (uint32_t j = 0; j < n; ++j) {
+        if (i != j) {
+          total_dist += ComputeDistance(points_[i].data(), points_[j].data());
+        }
+      }
+      if (total_dist < min_total_dist) {
+        min_total_dist = total_dist;
+        best_medoid = i;
+      }
+    }
+
+    return best_medoid;
   }
 
   uint32_t FindMedoid() const {
@@ -470,7 +698,7 @@ private:
       float diff = a[i] - b[i];
       dist += diff * diff;
     }
-    return std::sqrt(dist);
+    return dist;
   }
 
   // check if the degree of each node is less than max_degree_
